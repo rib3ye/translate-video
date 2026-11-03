@@ -55,6 +55,9 @@ The filter chain in burn.py, piece by piece:
 
   On the first run, frames with a subtitle differed by at least 59.9, and frames without one by at most 2.9. The
   pass/fail threshold is 6.
+
+  A translated sign drawn across that patch changes it whether or not a subtitle shows, so those frames can't be
+  judged. render.py lists them in `overlay/sign_patch.json`, verify.py skips them, and the line says how many.
 - **picture:** PSNR-Y over every frame with nothing drawn. The first run had a median of 49.4 dB. Grassy or leafy
   outdoor shots dip to about 38 dB, which is normal for CRF 16. A median under 42 means the encode went wrong.
 - **macOS playback:** AVFoundation's `isPlayable`, the same check QuickTime and Finder previews use.
@@ -87,6 +90,9 @@ The filter chain in burn.py, piece by piece:
 - **The last subtitle and the end of the video.** Subtitles are clamped to the last frame. Before that fix, speech
   running to the end of a clip pushed the last subtitle past it. verify.py then failed with "could not read the
   frames".
+- **A sign over the subtitle patch.** A plate covering a big label near the bottom of the frame made the timing
+  check fail on three "should be clear" frames, though every subtitle was right: the plate, not a subtitle, had
+  changed the patch. render.py now records where signs cover the patch, and verify.py skips those frames.
 - **The audio language tag.** YouTube downloads often tag Japanese audio as English. prepare.py prints a NOTE, and
   burn.py tags the transcribed audio stream with the spoken language unless given `--audio-lang keep`.
 

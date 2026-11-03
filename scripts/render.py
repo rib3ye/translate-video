@@ -1,6 +1,7 @@
 """Draws the subtitles and translated signs as full-frame transparent PNGs, one per distinct on-screen state, then
 writes the timed list ffmpeg overlays them from (overlay/list.ffconcat), the spans for the checking scripts
-(overlay/spans.json), and the dialogue-only SRT (translation/subs.srt). Prints any rule warnings.
+(overlay/spans.json), the frames where a sign covers the strip verify.py checks (overlay/sign_patch.json), and the
+dialogue-only SRT (translation/subs.srt). Prints any rule warnings.
 Usage: render.py <workdir>"""
 import json
 import shutil
@@ -19,6 +20,8 @@ W, H = meta["width"], meta["height"]
 SS = 2  # draw at twice the size, then shrink, for smooth edges
 geo = sl.geometry(meta)
 K = geo["scale"]
+PX, PY, PW, PH = sl.check_patch(meta)
+PATCH = (PX * SS, PY * SS, (PX + PW) * SS, (PY + PH) * SS)
 BOX = (0, 0, 0, int(meta.get("box_alpha", 190)))
 WHITE, BLACK = (255, 255, 255, 255), (0, 0, 0, 255)
 
@@ -125,7 +128,7 @@ events = [e for e in events if 0 <= e < total] + [total]
 out_dir = work / "overlay"
 shutil.rmtree(out_dir, ignore_errors=True)
 out_dir.mkdir()
-cache, spans = {}, []
+cache, spans, covered = {}, [], []
 for a, b in zip(events, events[1:]):
     active_cue = next((i for i, c in enumerate(cues) if c.start <= a < c.end), None)
     active_signs = tuple(i for i, s in enumerate(signs) if s[0] <= a < s[1])
@@ -137,11 +140,19 @@ for a, b in zip(events, events[1:]):
         for i in active_signs:
             _, _, sign, text = signs[i]
             DRAW[sign["kind"]](draw, sign, text)
+        # A sign inside verify.py's strip changes it whether or not a subtitle shows, so verify.py skips these frames
+        under = bool(active_signs) and layer.getchannel("A").crop(PATCH).getbbox() is not None
         if active_cue is not None:
             draw_sub(draw, cues[active_cue].text)
         layer.resize((W, H), Image.LANCZOS).save(out_dir / name, compress_level=6)
-        cache[key] = name
-    spans.append((a, b, cache[key], key == (None, ())))
+        cache[key] = (name, under)
+    name, under = cache[key]
+    spans.append((a, b, name, key == (None, ())))
+    if under:
+        if covered and covered[-1][1] == a:
+            covered[-1][1] = b
+        else:
+            covered.append([a, b])
 
 # Each change sits half a frame before its frame. "framerate 1000000" gives every PNG a microsecond clock: by default
 # each gets a 1/25 s clock, and the rounding to 40 ms steps puts subtitles a frame early at 29.97 fps and above.
@@ -152,6 +163,7 @@ for a, b, name, _ in spans:
 concat += [f"file '{spans[-1][2]}'", "option framerate 1000000"]
 (out_dir / "list.ffconcat").write_text("\n".join(concat) + "\n")
 (out_dir / "spans.json").write_text(json.dumps(spans))
+(out_dir / "sign_patch.json").write_text(json.dumps(covered))
 print(f"{len(cues)} subtitles, {len(signs)} signs, {len(cache)} overlay images, {len(problems)} warnings")
 for p in problems:
     print("  ", p)

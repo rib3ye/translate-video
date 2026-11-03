@@ -76,17 +76,15 @@ for c in picked:
     want[c.end - 1] = True
     if c.end < meta["frames"]:  # a subtitle may run to the very last frame
         want[c.end] = False
+# Where a translated sign covers the strip, the strip differs from the source with or without a subtitle, so those
+# frames can't be judged. render.py lists them; an overlay folder from before that has no list, and nothing is skipped.
+listed = work / "overlay/sign_patch.json"
+covered = [(a0, b0) for a0, b0 in json.loads(listed.read_text())] if listed.exists() else []
+skipped = [f for f in want if any(a0 <= f < b0 for a0, b0 in covered)]
+for f in skipped:
+    del want[f]
 frames = sorted(want)
-geo = sl.geometry(meta)
-k = geo["scale"]
-
-
-def even(v):
-    return max(2, int(v) // 2 * 2)  # 4:2:0 video crops at even sizes; an odd size gets rounded and misread
-
-
-PW, PH = even(200 * k), even(34 * k)
-PX, PY = even(meta["width"] / 2 - PW / 2), even(geo["bottom"] - 40 * k)
+PX, PY, PW, PH = sl.check_patch(meta)
 
 
 def grab(path, stream):
@@ -117,7 +115,9 @@ if frames:
         wrong = [(f, "should show" if want[f] else "should be clear", round(float(d), 1))
                  for d, f in zip(diff, frames) if (d > 6.0) != want[f]]
         detail = (f"{len(picked)} subtitles, {len(frames)} frames; difference from the source where one shows: "
-                  f"min {min(on):.1f}; where none should: max {max(off) if off else 0:.1f}")
+                  f"min {min(on) if on else 0:.1f}; where none should: max {max(off) if off else 0:.1f}")
+        if skipped:
+            detail += f"; {len(skipped)} frames under a sign skipped"
         report("subtitle timing", not wrong, detail + (f"; wrong frames: {wrong[:8]}" if wrong else ""))
 
 # 4. Picture quality on frames with nothing drawn, and decode errors, in one pass

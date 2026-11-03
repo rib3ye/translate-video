@@ -67,6 +67,19 @@ def geometry(meta):
     }
 
 
+def check_patch(meta):
+    """The strip inside the subtitle box that verify.py compares with the source, as x, y, width, height in video
+    pixels. All even: 4:2:0 video crops at even sizes, and an odd size gets rounded and misread."""
+    geo = geometry(meta)
+    k = geo["scale"]
+
+    def even(v):
+        return max(2, int(v) // 2 * 2)
+
+    w, h = even(200 * k), even(34 * k)
+    return even(meta["width"] / 2 - w / 2), even(geo["bottom"] - 40 * k), w, h
+
+
 def frames(seconds):
     return int(round(seconds * FPS))
 
