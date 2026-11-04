@@ -37,6 +37,15 @@ off, such as a topic card, get frame-exact times:
 It prints the start and end second of every appearance, plus the graphic's left and right edges inside the strip.
 Make the strip 2 px tall and lay it across a plain part of the graphic.
 
+Three traps:
+- **Two graphics in one span.** A card that is swapped for another of the same colour without leaving the screen
+  comes out as one span. Run color_spans.py again with a short strip that only the longer card covers; its spans
+  mark the switch.
+- **Wrong edges.** Anything else of the same colour inside the strip, such as a red wall behind a red label, widens
+  the reported edges. When an edge looks off, take the box from inspect_frame.py's OCR instead.
+- **Text that changes inside a fixed box,** such as a name label swapped without a cut, keeps the box's colour, so
+  color_spans.py can't see it. Run inspect_frame.py every 0.05 s near the OCR edges.
+
 ## Rows
 
 Each row is `start<TAB>end<TAB>kind<TAB>text`. Coordinates and font sizes are in the video's own pixels, and `|`
